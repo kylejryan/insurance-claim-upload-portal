@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kylejryan/insurance-claim-upload-portal/internal/awsutil"
 	"github.com/kylejryan/insurance-claim-upload-portal/internal/config"
 	"github.com/kylejryan/insurance-claim-upload-portal/internal/ddb"
 	"github.com/kylejryan/insurance-claim-upload-portal/internal/httpx"
@@ -19,7 +20,6 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
-	awsCfg "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/oklog/ulid/v2"
@@ -51,15 +51,21 @@ type App struct {
 
 func main() {
 	env := config.MustLoad()
-	cfg, err := awsCfg.LoadDefaultConfig(context.Background(), awsCfg.WithRegion(env.Region))
+	cfg, endpoint, err := awsutil.Load(context.Background(), env.Region)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	s3c := s3.NewFromConfig(cfg)
+	// S3 client: use path-style when hitting LocalStack
+	s3c := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		if endpoint != "" {
+			o.UsePathStyle = true
+		}
+	})
+
 	app := &App{
 		env:     env,
-		s3p:     s3.NewPresignClient(s3c),
+		s3p:     s3.NewPresignClient(s3c), // Use AWS SDK's presign client
 		ddbRepo: &ddb.Repo{DB: dynamodb.NewFromConfig(cfg), Table: env.Table},
 	}
 	lambda.Start(app.handler)
