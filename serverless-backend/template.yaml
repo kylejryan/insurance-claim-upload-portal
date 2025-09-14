@@ -6,7 +6,7 @@ Globals:
   Function:
     Timeout: 10
     MemorySize: 256
-    PackageType: Image
+    # PackageType: Image  # Remove this - not allowed in Globals
     Architectures: [x86_64]
     Environment:
       Variables:
@@ -25,6 +25,7 @@ Resources:
   PresignFunction:
     Type: AWS::Serverless::Function
     Properties:
+      PackageType: Image  # Add PackageType to each function
       Events:
         PresignRoute:
           Type: HttpApi
@@ -41,6 +42,7 @@ Resources:
   ListFunction:
     Type: AWS::Serverless::Function
     Properties:
+      PackageType: Image  # Add PackageType to each function
       Events:
         ListRoute:
           Type: HttpApi
@@ -57,6 +59,7 @@ Resources:
   IndexerFunction:
     Type: AWS::Serverless::Function
     Properties:
+      PackageType: Image  # Add PackageType to each function
       # No API event; this is S3-triggered in real infra.
       # In local dev, invoke with: sam local invoke IndexerFunction -e events/s3_put.json
       Events: {}

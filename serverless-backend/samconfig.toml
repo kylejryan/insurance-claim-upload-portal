@@ -1,0 +1,7 @@
+version = 0.1
+
+[default.build.parameters]
+use_container = true
+
+[default.build.env.parameters]
+DOCKER_BUILDKIT = "1"
