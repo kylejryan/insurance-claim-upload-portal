@@ -28,3 +28,16 @@ my-serverless-backend/
 ├─ Dockerfile       # Multi-stage; build all 3 handlers (separate images via args)
 ├─ go.mod / go.sum
 └─ README.md
+
+# 1) bring up LocalStack
+docker compose up -d
+
+# 2) create S3 bucket + DDB table
+aws --endpoint-url=http://localhost:4566 s3 mb s3://local-claims-bucket
+
+aws --endpoint-url=http://localhost:4566 dynamodb create-table \
+  --table-name local-claims-table \
+  --attribute-definitions AttributeName=PK,AttributeType=S AttributeName=SK,AttributeType=S \
+  --key-schema AttributeName=PK,KeyType=HASH AttributeName=SK,KeyType=RANGE \
+  --billing-mode PAY_PER_REQUEST
+ 
