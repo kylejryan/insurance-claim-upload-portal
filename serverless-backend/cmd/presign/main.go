@@ -1,5 +1,5 @@
-// Package presign provides functionality to generate presigned URLs for uploading files to S3.
-package presign
+// Package main provides functionality to generate presigned URLs for uploading files to S3.
+package main
 
 import (
 	"context"

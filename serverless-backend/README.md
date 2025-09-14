@@ -41,3 +41,5 @@ aws --endpoint-url=http://localhost:4566 dynamodb create-table \
   --key-schema AttributeName=PK,KeyType=HASH AttributeName=SK,KeyType=RANGE \
   --billing-mode PAY_PER_REQUEST
  
+sam build 
+sam local start-api --docker-network sam-local

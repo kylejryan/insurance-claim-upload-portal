@@ -1,7 +1,8 @@
+# samconfig.toml
 version = 0.1
 
 [default.build.parameters]
-use_container = true
+use_container = false  # Build on host, not in container
 
 [default.build.env.parameters]
 DOCKER_BUILDKIT = "1"

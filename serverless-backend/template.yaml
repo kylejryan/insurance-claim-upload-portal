@@ -1,17 +1,15 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Insurance Claim Upload Portal (local) – API + S3 indexer
+Description: Local API + indexer (SAM + LocalStack)
 
 Globals:
   Function:
     Timeout: 10
     MemorySize: 256
-    # PackageType: Image  # Remove this - not allowed in Globals
     Architectures: [x86_64]
     Environment:
       Variables:
         AWS_REGION: us-east-1
-        # Point SDKs to LocalStack at runtime (network alias below)
         AWS_ENDPOINT_URL: http://localstack:4566
         S3_BUCKET: local-claims-bucket
         DDB_TABLE: local-claims-table
@@ -25,7 +23,7 @@ Resources:
   PresignFunction:
     Type: AWS::Serverless::Function
     Properties:
-      PackageType: Image  # Add PackageType to each function
+      PackageType: Image
       Events:
         PresignRoute:
           Type: HttpApi
@@ -36,13 +34,12 @@ Resources:
     Metadata:
       Dockerfile: Dockerfile
       DockerContext: .
-      DockerBuildArgs:
-        TARGET: presign
+      DockerBuildArgs: { TARGET: presign }
 
   ListFunction:
     Type: AWS::Serverless::Function
     Properties:
-      PackageType: Image  # Add PackageType to each function
+      PackageType: Image
       Events:
         ListRoute:
           Type: HttpApi
@@ -53,18 +50,14 @@ Resources:
     Metadata:
       Dockerfile: Dockerfile
       DockerContext: .
-      DockerBuildArgs:
-        TARGET: list
+      DockerBuildArgs: { TARGET: list }
 
   IndexerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      PackageType: Image  # Add PackageType to each function
-      # No API event; this is S3-triggered in real infra.
-      # In local dev, invoke with: sam local invoke IndexerFunction -e events/s3_put.json
-      Events: {}
+      PackageType: Image
+      # No local S3 event wiring; invoke manually with a sample event JSON
     Metadata:
       Dockerfile: Dockerfile
       DockerContext: .
-      DockerBuildArgs:
-        TARGET: indexer
+      DockerBuildArgs: { TARGET: indexer }

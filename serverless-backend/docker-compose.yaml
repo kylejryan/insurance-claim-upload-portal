@@ -3,17 +3,14 @@ services:
   localstack:
     image: localstack/localstack:latest
     container_name: localstack
-    ports:
-      - "4566:4566"
-      - "4510-4559:4510-4559"
+    ports: ["4566:4566","4510-4559:4510-4559"]
     environment:
       - SERVICES=s3,dynamodb,iam,sts
       - DEBUG=1
       - DOCKER_HOST=unix:///var/run/docker.sock
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
-    networks:
-      - sam-local
+    networks: [sam-local]
 
 networks:
   sam-local:

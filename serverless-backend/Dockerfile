@@ -1,21 +1,25 @@
-# ---- Builder: Chainguard Go 1.25
-FROM cgr.dev/chainguard/go:latest AS builder
+# ---------- Builder ----------
+FROM golang:1.25-alpine AS builder
 WORKDIR /src
-
-# Prime modules
+RUN apk add --no-cache git ca-certificates
 COPY go.mod go.sum ./
-RUN --mount=type=cache,target=/go/pkg/mod go mod download
-
-# Copy source
+RUN go mod download
 COPY . .
-
-# Build arg selects which cmd/* to build
 ARG TARGET=presign
-RUN --mount=type=cache,target=/go/pkg/mod \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+# build the program at ./cmd/${TARGET} (must be package main)
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -trimpath -ldflags="-s -w" -o /out/bootstrap ./cmd/${TARGET}
 
-# ---- Runtime: AWS Lambda custom runtime (provided.al2)
+# ---------- Runtime (Lambda custom runtime) ----------
 FROM public.ecr.aws/lambda/provided:al2
-# Lambda looks for /var/runtime/bootstrap
+# RIE path for SAM Local
+RUN mkdir -p /var/rapid && \
+    if [ -f /usr/local/bin/aws-lambda-rie ]; then \
+      cp /usr/local/bin/aws-lambda-rie /var/rapid/aws-lambda-rie-x86_64; \
+    elif [ -f /usr/local/bin/aws-lambda-rie-x86_64 ]; then \
+      cp /usr/local/bin/aws-lambda-rie-x86_64 /var/rapid/aws-lambda-rie-x86_64; \
+    else echo "RIE not found"; exit 1; fi
+
 COPY --from=builder /out/bootstrap /var/runtime/bootstrap
+RUN chmod +x /var/runtime/bootstrap
+CMD ["bootstrap"]
