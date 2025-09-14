@@ -1,0 +1,1 @@
+FROM cgr.dev/chainguard/go:1.25.0 AS builder

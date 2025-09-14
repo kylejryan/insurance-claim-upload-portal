@@ -1,0 +1,21 @@
+ignoreGeneratedHeader = false
+severity = "warning"
+confidence = 0.8
+errorCode = 0
+warningCode = 0
+
+# Enable common rules
+[rule.blank-imports]
+[rule.error-return]
+[rule.error-strings]
+[rule.exported]
+[rule.var-naming]
+[rule.package-comments]
+[rule.unexported-return]
+
+# Tuning complexity
+[rule.cyclomatic]
+arguments = [10]
+
+[rule.cognitive-complexity]
+arguments = [7]

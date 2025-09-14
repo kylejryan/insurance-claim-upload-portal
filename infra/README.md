@@ -1,0 +1,1 @@
+Going to explain my architecture here a bit
