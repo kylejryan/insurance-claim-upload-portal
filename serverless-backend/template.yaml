@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Claim portal (local dev) – presign endpoint
+
+Globals:
+  Function:
+    Timeout: 10
+    MemorySize: 256
+    Runtime: provided.al2
+    Architectures: [x86_64]
+    Environment:
+      Variables:
+        AWS_REGION: !Ref AwsRegion
+        S3_BUCKET: !Ref BucketName
+        DDB_TABLE: !Ref TableName
+        PRESIGN_TTL_SECONDS: 300
+        DEV_BYPASS_AUTH: true   # set false in real stacks
+
+Parameters:
+  AwsRegion:
+    Type: String
+    Default: us-east-1
+  BucketName:
+    Type: String
+    Default: local-claims-bucket
+  TableName:
+    Type: String
+    Default: local-claims-table
+
+Resources:
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+
+  PresignFunction:
+    Type: AWS::Serverless::Function # Intentionally leaving out Log Groups since this is for local testing
+    Properties:
+      Handler: cmd/presign/main
+      CodeUri: .
+      Events:
+        PresignRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: POST
+            Path: /claims/presign
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TableName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: !Sub arn:aws:s3:::${BucketName}/*
+    Metadata:
+      BuildMethod: go1.x

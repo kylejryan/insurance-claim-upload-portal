@@ -1,1 +1,7 @@
 /infra/.terraform
+/serverless-backend/.aws-sam
+.env
+.DS_Store
+*.log
+*.out
+*.zip
