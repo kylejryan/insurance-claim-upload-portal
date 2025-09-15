@@ -1,5 +1,5 @@
 locals {
-  name         = "${var.project}-${var.env}"
+  name          = "${var.project}-${var.env}"
   bucket_claims = "${var.project}-artifacts-${var.env}"
   table_claims  = "claims_${var.env}"
 

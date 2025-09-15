@@ -1,6 +1,6 @@
 resource "aws_cognito_user_pool" "this" {
   name = "${local.name}-users"
-  
+
   password_policy {
     minimum_length    = 12
     require_lowercase = true
@@ -8,14 +8,14 @@ resource "aws_cognito_user_pool" "this" {
     require_symbols   = true
     require_uppercase = true
   }
-  
+
   account_recovery_setting {
     recovery_mechanism {
       name     = "verified_email"
       priority = 1
     }
   }
-  
+
   tags = local.tags
 }
 

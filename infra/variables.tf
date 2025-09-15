@@ -57,3 +57,18 @@ variable "enable_xray" {
   type    = bool
   default = true
 }
+
+variable "presign_image_digest" {
+  type    = string
+  default = "dev"
+}
+
+variable "list_image_digest" {
+  type    = string
+  default = "dev"
+}
+
+variable "indexer_image_digest" {
+  type    = string
+  default = "dev"
+}

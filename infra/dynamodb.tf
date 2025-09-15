@@ -8,7 +8,7 @@ resource "aws_dynamodb_table" "claims" {
     name = "user_id"
     type = "S"
   }
-  
+
   attribute {
     name = "claim_id"
     type = "S"

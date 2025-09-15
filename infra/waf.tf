@@ -9,20 +9,20 @@ resource "aws_wafv2_web_acl" "this" {
   rule {
     name     = "AWS-AWSManagedRulesCommonRuleSet"
     priority = 1
-    
+
     statement {
       managed_rule_group_statement {
         name        = "AWSManagedRulesCommonRuleSet"
         vendor_name = "AWS"
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "${local.name}-common"
       sampled_requests_enabled   = true
     }
-    
+
     override_action {
       none {}
     }
@@ -31,20 +31,20 @@ resource "aws_wafv2_web_acl" "this" {
   rule {
     name     = "RateLimit"
     priority = 10
-    
+
     statement {
       rate_based_statement {
         limit              = 2000
         aggregate_key_type = "IP"
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "${local.name}-rate"
       sampled_requests_enabled   = true
     }
-    
+
     action {
       block {}
     }

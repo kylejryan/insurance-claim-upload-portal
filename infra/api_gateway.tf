@@ -1,7 +1,7 @@
 resource "aws_apigatewayv2_api" "http" {
   name          = "${local.name}-api"
   protocol_type = "HTTP"
-  
+
   cors_configuration {
     allow_origins     = var.cognito_callback_urls
     allow_methods     = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
@@ -10,7 +10,7 @@ resource "aws_apigatewayv2_api" "http" {
     max_age           = 3600
     allow_credentials = true
   }
-  
+
   tags = local.tags
 }
 
@@ -20,7 +20,7 @@ resource "aws_apigatewayv2_authorizer" "jwt" {
   authorizer_type  = "JWT"
   identity_sources = ["$request.header.Authorization"]
   name             = "${local.name}-jwt"
-  
+
   jwt_configuration {
     audience = [aws_cognito_user_pool_client.this.id]
     issuer   = "https://cognito-idp.${var.region}.amazonaws.com/${aws_cognito_user_pool.this.id}"
@@ -69,7 +69,7 @@ resource "aws_apigatewayv2_stage" "prod" {
   api_id      = aws_apigatewayv2_api.http.id
   name        = "prod"
   auto_deploy = true
-  
+
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.api_access.arn
     format = jsonencode({
