@@ -256,11 +256,11 @@ func (a *App) generatePresignedURL(ctx context.Context, userID, claimID, s3Key s
 	return s3io.PresignPut(ctx, a.s3p, a.env.Bucket, s3Key, req.ContentType, meta, a.env.PresignTTL)
 }
 
-// sanitizeName trims whitespace and defaults to "claim.txt" if empty.
+// sanitizeName trims whitespace and defaults to a ULID-based filename if empty.
 func sanitizeName(s string) string {
 	s = strings.TrimSpace(s)
 	if s == "" {
-		return "claim.txt"
+		return ulid.Make().String() + ".txt"
 	}
 	return s
 }

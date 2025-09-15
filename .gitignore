@@ -5,3 +5,4 @@
 *.log
 *.out
 *.zip
+/serverless-backend/events

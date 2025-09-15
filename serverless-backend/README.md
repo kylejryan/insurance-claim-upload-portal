@@ -43,3 +43,43 @@ aws --endpoint-url=http://localhost:4566 dynamodb create-table \
  
 sam build 
 sam local start-api --docker-network sam-local
+
+# Save response to a file to grab variables
+RESP=$(curl -s -X POST http://127.0.0.1:3000/claims/presign \
+  -H 'Content-Type: application/json' \
+  -H 'x-user-sub: 11111111-1111-1111-1111-111111111111' \
+  -d '{"filename":"report.txt","tags":["car accident","urgent"],"client":"Acme Insurance","content_type":"text/plain"}')
+
+CLAIM_ID=$(printf '%s' "$RESP" | jq -r .claim_id)
+URL_CONTAINER=$(printf '%s' "$RESP" | jq -r .presigned_url)
+URL_HOST=${URL_CONTAINER/localstack:4566/localhost:4566}
+
+echo "hello claim portal" > /tmp/report.txt
+
+# IMPORTANT: include the signed x-amz-meta-* headers
+curl -v -X PUT "$URL_HOST" \
+  -H 'Content-Type: text/plain' \
+  -H "x-amz-meta-claim_id: $CLAIM_ID" \
+  -H 'x-amz-meta-user_id: 11111111-1111-1111-1111-111111111111' \
+  -H 'x-amz-meta-tags: car accident,urgent' \
+  -H 'x-amz-meta-client: Acme Insurance' \
+  --data-binary @/tmp/report.txt
+
+cat > events/s3_put.json <<JSON
+{
+  "Records": [
+    {
+      "s3": {
+        "bucket": { "name": "local-claims-bucket" },
+        "object": { "key": "user/11111111-1111-1111-1111-111111111111/${CLAIM_ID}.txt" }
+      }
+    }
+  ]
+}
+JSON
+
+sam local invoke IndexerFunction --docker-network sam-local -e events/s3_put.json
+
+curl -s http://127.0.0.1:3000/claims \
+  -H 'x-user-sub: 11111111-1111-1111-1111-111111111111' | jq
+

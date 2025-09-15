@@ -14,8 +14,8 @@ const (
 // Claim represents an insurance claim uploaded by a user.
 type Claim struct {
 	// DynamoDB keys
-	PK string `dynamodbav:"PK"` // USER#<sub>
-	SK string `dynamodbav:"SK"` // CLAIM#<claimID> (ULID)
+	PK string `dynamodbav:"PK" json:"-"` // USER#<sub>
+	SK string `dynamodbav:"SK" json:"-"` // CLAIM#<claimID> (ULID)
 
 	ClaimID    string      `dynamodbav:"claim_id"`
 	UserID     string      `dynamodbav:"user_id"`

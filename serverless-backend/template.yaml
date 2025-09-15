@@ -15,7 +15,6 @@ Globals:
         S3_BUCKET: local-claims-bucket
         DDB_TABLE: local-claims-table
         PRESIGN_TTL_SECONDS: 300
-        DEV_BYPASS_AUTH: true
 
 Resources:
   HttpApi:
@@ -25,6 +24,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       PackageType: Image
+      ImageConfig:
+        Command: ["bootstrap"]
       Events:
         PresignRoute:
           Type: HttpApi
@@ -41,6 +42,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       PackageType: Image
+      ImageConfig:
+        Command: ["bootstrap"]
       Events:
         ListRoute:
           Type: HttpApi
@@ -57,7 +60,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       PackageType: Image
-      # No local S3 event wiring; invoke manually with a sample event JSON
+      ImageConfig:
+        Command: ["bootstrap"]
     Metadata:
       Dockerfile: Dockerfile
       DockerContext: .
