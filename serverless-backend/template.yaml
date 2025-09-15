@@ -9,6 +9,7 @@ Globals:
     Architectures: [x86_64]
     Environment:
       Variables:
+        DEV_BYPASS_AUTH: true
         AWS_REGION: us-east-1
         AWS_ENDPOINT_URL: http://localstack:4566
         S3_BUCKET: local-claims-bucket

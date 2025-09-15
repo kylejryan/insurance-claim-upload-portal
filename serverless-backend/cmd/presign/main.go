@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -102,21 +103,94 @@ func (a *App) handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (
 	})
 }
 
+// headerLookup returns a header value case-insensitively.
+func headerLookup(h map[string]string, key string) string {
+	if len(h) == 0 {
+		return ""
+	}
+	lk := strings.ToLower(key)
+	for k, v := range h {
+		if strings.ToLower(k) == lk {
+			return v
+		}
+	}
+	return ""
+}
+
 // extractUserID extracts the user ID from the request, supporting dev bypass.
 func (a *App) extractUserID(req events.APIGatewayV2HTTPRequest) (string, error) {
-	if a.env.DevBypassAuth {
-		if sub := req.Headers["x-user-sub"]; sub != "" {
-			return sub, nil
+	// Try dev bypass first
+	if sub := a.tryDevBypass(req); sub != "" {
+		return sub, nil
+	}
+
+	// Try JWT claims
+	if sub := a.tryJWTClaims(req); sub != "" {
+		return sub, nil
+	}
+
+	// Try Lambda authorizer
+	if sub := a.tryLambdaAuthorizer(req); sub != "" {
+		return sub, nil
+	}
+
+	return "", fmt.Errorf("unauthorized: missing user id")
+}
+
+// tryDevBypass attempts to extract user ID from dev bypass header.
+func (a *App) tryDevBypass(req events.APIGatewayV2HTTPRequest) string {
+	if !a.env.DevBypassAuth {
+		return ""
+	}
+	return strings.TrimSpace(headerLookup(req.Headers, "x-user-sub"))
+}
+
+// tryJWTClaims attempts to extract user ID from JWT claims with safe type handling.
+func (a *App) tryJWTClaims(req events.APIGatewayV2HTTPRequest) string {
+	claims := req.RequestContext.Authorizer.JWT.Claims
+	if claims == nil {
+		return ""
+	}
+
+	switch c := any(claims).(type) {
+	case map[string]any:
+		return a.extractFromAnyMap(c)
+	case map[string]string:
+		return c["sub"]
+	}
+
+	return ""
+}
+
+// tryLambdaAuthorizer attempts to extract user ID from Lambda authorizer context.
+func (a *App) tryLambdaAuthorizer(req events.APIGatewayV2HTTPRequest) string {
+	authData := req.RequestContext.Authorizer.Lambda
+	if authData == nil {
+		return ""
+	}
+
+	if v, ok := authData["sub"]; ok {
+		if s, ok := v.(string); ok {
+			return s
 		}
 	}
 
-	if req.RequestContext.Authorizer.JWT.Claims != nil {
-		if sub, ok := req.RequestContext.Authorizer.JWT.Claims["sub"]; ok && sub != "" {
-			return sub, nil
-		}
+	return ""
+}
+
+// extractFromAnyMap safely extracts string value from map[string]any.
+func (a *App) extractFromAnyMap(claims map[string]any) string {
+	v, ok := claims["sub"]
+	if !ok {
+		return ""
 	}
 
-	return "", errors.New("missing user")
+	s, ok := v.(string)
+	if !ok {
+		return ""
+	}
+
+	return s
 }
 
 // parseAndValidateRequest parses the JSON body and validates all input fields.
