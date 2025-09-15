@@ -6,3 +6,6 @@
 *.out
 *.zip
 /serverless-backend/events
+/infra/terraform.tfstate
+/infra/terraform.tfstate.backup
+/infra/env

@@ -59,8 +59,13 @@ resource "aws_wafv2_web_acl" "this" {
   tags = local.tags
 }
 
-# Associate WAF to API Gateway Stage
+# Associate WAF to REST API Gateway Stage
+# REST API v1 uses the stage ARN directly
 resource "aws_wafv2_web_acl_association" "api" {
-  resource_arn = aws_apigatewayv2_stage.prod.arn
+  resource_arn = aws_api_gateway_stage.prod.arn
   web_acl_arn  = aws_wafv2_web_acl.this.arn
+
+  depends_on = [
+    aws_api_gateway_stage.prod
+  ]
 }

@@ -60,15 +60,15 @@ variable "enable_xray" {
 
 variable "presign_image_digest" {
   type    = string
-  default = "dev"
+  default = ""  
 }
 
 variable "list_image_digest" {
   type    = string
-  default = "dev"
+  default = ""  
 }
 
 variable "indexer_image_digest" {
   type    = string
-  default = "dev"
+  default = ""  
 }
