@@ -20,6 +20,18 @@ resource "aws_s3_bucket_public_access_block" "claims" {
   restrict_public_buckets = true
 }
 
+resource "aws_s3_bucket_cors_configuration" "claims" {
+  bucket = aws_s3_bucket.claims.id
+
+  cors_rule {
+    allowed_methods = ["PUT", "HEAD"]
+    allowed_origins = [var.cognito_callback_urls[0]]
+    allowed_headers = ["*"]
+    expose_headers  = ["ETag", "x-amz-server-side-encryption", "x-amz-version-id"]
+    max_age_seconds = 300
+  }
+}
+
 resource "aws_s3_bucket_server_side_encryption_configuration" "claims" {
   bucket = aws_s3_bucket.claims.id
 
