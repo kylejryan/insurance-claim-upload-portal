@@ -10,3 +10,4 @@
 /infra/terraform.tfstate.backup
 /infra/env
 internal-notes.md
+*.backup

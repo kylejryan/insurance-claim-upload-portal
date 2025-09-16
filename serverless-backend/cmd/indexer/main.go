@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"path/filepath"
 	"strings"
 
 	"github.com/kylejryan/insurance-claim-upload-portal/internal/awsutil"
 	"github.com/kylejryan/insurance-claim-upload-portal/internal/config"
 	"github.com/kylejryan/insurance-claim-upload-portal/internal/ddb"
 	"github.com/kylejryan/insurance-claim-upload-portal/internal/models"
+	"github.com/kylejryan/insurance-claim-upload-portal/internal/s3io"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -30,6 +30,9 @@ type App struct {
 // main initializes the app and starts the Lambda handler.
 func main() {
 	env := config.MustLoad()
+	if err := env.Validate(); err != nil { // <- ensure env present
+		log.Fatal(err)
+	}
 	cfg, endpoint, err := awsutil.Load(context.Background(), env.Region)
 	if err != nil {
 		log.Fatal(err)
@@ -76,20 +79,20 @@ func (a *App) processS3Record(ctx context.Context, record events.S3EventRecord) 
 	userID := strings.TrimSpace(meta.Meta["user_id"])
 	claimID := strings.TrimSpace(meta.Meta["claim_id"])
 	if userID == "" || claimID == "" {
-		u2, c2, perr := a.parseS3Key(key)
-		if perr != nil {
-			return fmt.Errorf("bad key %q: %w", key, perr)
-		}
-		if userID == "" {
-			userID = u2
-		}
-		if claimID == "" {
-			claimID = c2
+		if u2, c2, ok := s3io.ParseKey(key); ok { // <- centralized key parser
+			if userID == "" {
+				userID = u2
+			}
+			if claimID == "" {
+				claimID = c2
+			}
+		} else {
+			return fmt.Errorf("bad key %q", key)
 		}
 	}
 
 	// Complete the record (writes size, etag, uploaded_at, s3_key, status)
-	if err := a.finalizeClaimUpload(ctx, userID, claimID, key, meta); err != nil {
+	if err := a.ddbRepo.UpsertComplete(ctx, userID, claimID, key, meta.Size, meta.ETag, ddb.NowISO()); err != nil {
 		return fmt.Errorf("finalize %s/%s: %w", userID, claimID, err)
 	}
 
@@ -99,20 +102,6 @@ func (a *App) processS3Record(ctx context.Context, record events.S3EventRecord) 
 }
 
 // ---- Helpers ----
-
-// parseS3Key extracts userID and claimID from the S3 key path.
-func (a *App) parseS3Key(key string) (userID, claimID string, err error) {
-	if strings.ToLower(filepath.Ext(key)) != ".txt" {
-		return "", "", fmt.Errorf("non-txt file")
-	}
-	parts := strings.Split(key, "/")
-	if len(parts) != 3 || parts[0] != "user" {
-		return "", "", fmt.Errorf("unexpected key shape")
-	}
-	userID = parts[1]
-	claimID = strings.TrimSuffix(parts[2], ".txt")
-	return userID, claimID, nil
-}
 
 // objectMetadata holds S3 object metadata and user-defined metadata.
 type objectMetadata struct {
@@ -144,7 +133,7 @@ func (a *App) getObjectMetadata(ctx context.Context, bucket, key string) (*objec
 	if ho.ContentType != nil {
 		m.ContentType = strings.ToLower(*ho.ContentType)
 		// Be tolerant: log if unexpected but don't fail the pipeline
-		if m.ContentType != "" && m.ContentType != "text/plain" {
+		if m.ContentType != "" && m.ContentType != s3io.ContentTypeText { // <- constant
 			log.Printf("indexer: warning content-type=%s for %s", m.ContentType, key)
 		}
 	}
@@ -154,9 +143,4 @@ func (a *App) getObjectMetadata(ctx context.Context, bucket, key string) (*objec
 	}
 
 	return m, nil
-}
-
-func (a *App) finalizeClaimUpload(ctx context.Context, userID, claimID, s3Key string, md *objectMetadata) error {
-	// UpsertComplete should set: status=COMPLETE, uploaded_at, size_bytes, etag, s3_key
-	return a.ddbRepo.UpsertComplete(ctx, userID, claimID, s3Key, md.Size, md.ETag, ddb.NowISO())
 }

@@ -54,6 +54,9 @@ type App struct {
 
 func main() {
 	env := config.MustLoad()
+	if err := env.Validate(); err != nil { //
+		log.Fatal(err)
+	}
 	cfg, endpoint, err := awsutil.Load(context.Background(), env.Region)
 	if err != nil {
 		log.Fatal(err)
@@ -88,7 +91,7 @@ func (a *App) handler(ctx context.Context, req events.APIGatewayProxyRequest) (e
 	}
 
 	cid := ulid.Make().String()
-	key := "user/" + sub + "/" + cid + ".txt"
+	key := s3io.BuildKey(sub, cid) // <- centralized S3 key builder
 
 	if err := a.createPendingRecord(ctx, sub, cid, key, body); err != nil {
 		log.Printf("ddb PutPending err: %v", err)
@@ -102,14 +105,13 @@ func (a *App) handler(ctx context.Context, req events.APIGatewayProxyRequest) (e
 	}
 
 	// build the exact headers the client must send on the PUT
-	up := map[string]string{
-		"Content-Type":                 body.ContentType,
-		"x-amz-server-side-encryption": "aws:kms",
-		"x-amz-meta-claim_id":          cid,
-		"x-amz-meta-tags":              strings.Join(body.Tags, ","),
-		"x-amz-meta-client":            body.Client,
-		"x-amz-meta-user_id":           sub,
-	}
+	up := s3io.UploadHeaders(
+		sub,
+		cid,
+		body.ContentType,
+		strings.Join(body.Tags, ","),
+		body.Client,
+	)
 
 	return httpx.JSONV1(http.StatusOK, presignResponse{
 		ClaimID:       cid,
@@ -129,7 +131,7 @@ func (a *App) parseAndValidateRequest(body string) (presignRequest, error) {
 		return req, errors.New("invalid json")
 	}
 	if req.ContentType == "" {
-		req.ContentType = "text/plain"
+		req.ContentType = s3io.ContentTypeText // <- single source of truth
 	}
 	// Validators
 	if err := validate.FilenameTxt(req.Filename); err != nil {

@@ -25,7 +25,10 @@ type App struct {
 
 // main initializes the app and starts the Lambda handler.
 func main() {
-	env := config.MustLoad() // your config expects REGION, DDB_TABLE, S3_BUCKET
+	env := config.MustLoad()               // your config expects REGION, DDB_TABLE, S3_BUCKET
+	if err := env.Validate(); err != nil { // <- ensure env present
+		log.Fatal(err)
+	}
 	cfg, _, err := awsutil.Load(context.Background(), env.Region)
 	if err != nil {
 		log.Fatal(err)
