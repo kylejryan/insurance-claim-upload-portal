@@ -47,3 +47,14 @@ func must(k string) string {
 	}
 	return v
 }
+
+// Validate checks that all required environment variables are set.
+func (e Env) Validate() error {
+	if e.Table == "" {
+		return fmt.Errorf("missing env DDB_TABLE")
+	}
+	if e.Bucket == "" {
+		return fmt.Errorf("missing env S3_BUCKET")
+	}
+	return nil
+}

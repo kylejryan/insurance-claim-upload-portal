@@ -34,3 +34,25 @@ type UserClaims struct {
 	Sub   string
 	Email string
 }
+
+// ClaimView is a sanitized view of Claim for API responses.
+type ClaimView struct {
+	ClaimID    string   `json:"claim_id"`
+	Filename   string   `json:"filename"`
+	Tags       []string `json:"tags"`
+	Client     string   `json:"client"`
+	Status     string   `json:"status"`
+	UploadedAt string   `json:"uploaded_at"`
+	SizeBytes  int64    `json:"size_bytes"`
+	ETag       string   `json:"etag"`
+	S3Key      string   `json:"s3_key"`
+}
+
+// View returns a ClaimView representation of the Claim.
+func (c Claim) View() ClaimView {
+	return ClaimView{
+		ClaimID: c.ClaimID, Filename: c.Filename, Tags: c.Tags, Client: c.Client,
+		Status: string(c.Status), UploadedAt: c.UploadedAt, SizeBytes: c.SizeBytes,
+		ETag: c.ETag, S3Key: c.S3Key,
+	}
+}

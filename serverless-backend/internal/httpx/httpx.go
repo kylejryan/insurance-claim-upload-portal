@@ -7,10 +7,14 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 )
 
-// JSON creates a JSON HTTP response with the given status code and value.
-func JSON(status int, v any) (events.APIGatewayV2HTTPResponse, error) {
+//
+// -------- REST API Gateway v1 (APIGatewayProxyResponse) --------
+//
+
+// JSONV1 constructs a JSON response with the given status code and value.
+func JSONV1(status int, v any) (events.APIGatewayProxyResponse, error) {
 	b, _ := json.Marshal(v)
-	return events.APIGatewayV2HTTPResponse{
+	return events.APIGatewayProxyResponse{
 		StatusCode: status,
 		Headers: map[string]string{
 			"Content-Type": "application/json",
@@ -19,7 +23,7 @@ func JSON(status int, v any) (events.APIGatewayV2HTTPResponse, error) {
 	}, nil
 }
 
-// Error creates a JSON HTTP error response with the given status code and message.
-func Error(status int, msg string) (events.APIGatewayV2HTTPResponse, error) {
-	return JSON(status, map[string]string{"error": msg})
+// ErrorV1 constructs a JSON error response with the given status code and message.
+func ErrorV1(status int, msg string) (events.APIGatewayProxyResponse, error) {
+	return JSONV1(status, map[string]string{"message": msg})
 }
