@@ -61,23 +61,30 @@ func (r *Repo) PutPending(ctx context.Context, c models.Claim) error {
 }
 
 // UpsertComplete updates an existing claim record to status COMPLETE with upload details.
-func (r *Repo) UpsertComplete(ctx context.Context, userID, claimID string, size int64, etag, uploadedAt string) error {
-	pk, sk := MakeKeys(userID, claimID)
+func (r *Repo) UpsertComplete(
+	ctx context.Context,
+	userID, claimID, s3Key string,
+	size int64,
+	etag, uploadedAt string,
+) error {
 	_, err := r.DB.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: &r.Table,
 		Key: map[string]types.AttributeValue{
-			"PK": &types.AttributeValueMemberS{Value: pk},
-			"SK": &types.AttributeValueMemberS{Value: sk},
+			"user_id":  &types.AttributeValueMemberS{Value: userID},
+			"claim_id": &types.AttributeValueMemberS{Value: claimID},
 		},
-		UpdateExpression:         awsStr("SET #s=:s, uploaded_at=:u, size_bytes=:b, etag=:e"),
-		ExpressionAttributeNames: map[string]string{"#s": "status"},
+		UpdateExpression: awsStr("SET #s = :s, uploaded_at = :u, size_bytes = :b, etag = :e, s3_key = :k"),
+		ExpressionAttributeNames: map[string]string{
+			"#s": "status",
+		},
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":s": &types.AttributeValueMemberS{Value: string(models.StatusComplete)},
 			":u": &types.AttributeValueMemberS{Value: uploadedAt},
 			":b": &types.AttributeValueMemberN{Value: strconv.FormatInt(size, 10)},
 			":e": &types.AttributeValueMemberS{Value: etag},
+			":k": &types.AttributeValueMemberS{Value: s3Key},
 		},
-		ConditionExpression: awsStr("attribute_exists(PK) AND attribute_exists(SK)"),
+		ConditionExpression: awsStr("attribute_exists(user_id) AND attribute_exists(claim_id)"),
 	})
 	return err
 }
