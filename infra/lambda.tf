@@ -6,8 +6,6 @@ locals {
   indexer_image_uri = var.indexer_image_digest != "" ? "${aws_ecr_repository.indexer.repository_url}@${var.indexer_image_digest}" : "${aws_ecr_repository.indexer.repository_url}:${var.image_tag_indexer}"
 }
 
-
-
 # Presign endpoint Lambda
 resource "aws_lambda_function" "api_presign" {
   function_name = "${local.name}-api-presign"
@@ -41,7 +39,7 @@ resource "aws_lambda_function" "api_presign" {
 resource "aws_lambda_function" "api_list" {
   function_name = "${local.name}-api-list"
   package_type  = "Image"
-  image_uri     = local.list_image_uri # list
+  image_uri     = local.list_image_uri
   role          = aws_iam_role.lambda_list.arn
   timeout       = 10
   memory_size   = 256
@@ -58,6 +56,8 @@ resource "aws_lambda_function" "api_list" {
   environment {
     variables = {
       DDB_TABLE = aws_dynamodb_table.claims.name
+      S3_BUCKET = aws_s3_bucket.claims.bucket     
+      KMS_KEY   = aws_kms_key.ddb.arn             
     }
   }
 

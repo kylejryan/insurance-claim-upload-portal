@@ -32,16 +32,30 @@ func MakeKeys(sub, claimID string) (pk, sk string) {
 	return fmt.Sprintf("USER#%s", sub), fmt.Sprintf("CLAIM#%s", claimID)
 }
 
-// PutPending inserts a new claim record with status UPLOADING, ensuring no duplicate exists.
+// PutPending writes a new record with (user_id, claim_id). The condition only guards claim_id,
+// so you can have multiple claims per user.
 func (r *Repo) PutPending(ctx context.Context, c models.Claim) error {
-	item, err := attributevalue.MarshalMap(c)
+	// Store with explicit attribute names that match the table schema.
+	itemMap := map[string]any{
+		"user_id":     c.UserID,
+		"claim_id":    c.ClaimID,
+		"filename":    c.Filename,
+		"s3_key":      c.S3Key,
+		"tags":        c.Tags,
+		"client":      c.Client,
+		"status":      c.Status,
+		"uploaded_at": time.Now().UTC().Format(time.RFC3339Nano), // optional
+	}
+	item, err := attributevalue.MarshalMap(itemMap)
 	if err != nil {
 		return err
 	}
+
 	_, err = r.DB.PutItem(ctx, &dynamodb.PutItemInput{
-		TableName:           &r.Table,
-		Item:                item,
-		ConditionExpression: awsStr("attribute_not_exists(PK) AND attribute_not_exists(SK)"),
+		TableName: aws.String(r.Table),
+		Item:      item,
+
+		ConditionExpression: aws.String("attribute_not_exists(claim_id)"),
 	})
 	return err
 }
@@ -68,24 +82,27 @@ func (r *Repo) UpsertComplete(ctx context.Context, userID, claimID string, size 
 	return err
 }
 
-// ListByUser retrieves a list of claims for a given user, limited to the specified number.
+// ListByUser queries the table by user_id (PK) and returns newest-first by ULID claim_id.
 func (r *Repo) ListByUser(ctx context.Context, userID string, limit int32) ([]models.Claim, error) {
-	pk := fmt.Sprintf("USER#%s", userID)
+	if limit <= 0 {
+		limit = 100
+	}
 
-	pe := "claim_id, filename, tags, client, #s, uploaded_at, size_bytes, etag, s3_key"
+	pe := "user_id, claim_id, filename, tags, client, #s, uploaded_at, size_bytes, etag, s3_key"
 
 	out, err := r.DB.Query(ctx, &dynamodb.QueryInput{
-		TableName:              &r.Table,
-		KeyConditionExpression: awsStr("PK = :pk"),
-		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":pk": &types.AttributeValueMemberS{Value: pk},
-		},
-		// newest first (ULID sorts by time)
-		ScanIndexForward:     aws.Bool(false),
-		ProjectionExpression: awsStr(pe),
+		TableName:              aws.String(r.Table),
+		KeyConditionExpression: aws.String("#uid = :u"),
 		ExpressionAttributeNames: map[string]string{
-			"#s": "status",
+			"#uid": "user_id",
+			"#s":   "status",
 		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":u": &types.AttributeValueMemberS{Value: userID},
+		},
+		ProjectionExpression: aws.String(pe),
+		ScanIndexForward:     aws.Bool(false), // ULID sorts by time → newest first
+		Limit:                aws.Int32(limit),
 	})
 	if err != nil {
 		return nil, err

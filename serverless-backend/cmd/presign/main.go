@@ -36,11 +36,12 @@ type presignRequest struct {
 }
 
 type presignResponse struct {
-	ClaimID      string `json:"claim_id"`
-	S3Key        string `json:"s3_key"`
-	PresignedURL string `json:"presigned_url"`
-	ExpiresIn    int    `json:"expires_in"`
-	ContentType  string `json:"content_type"`
+	ClaimID       string            `json:"claim_id"`
+	S3Key         string            `json:"s3_key"`
+	PresignedURL  string            `json:"presigned_url"`
+	ExpiresIn     int               `json:"expires_in"`
+	ContentType   string            `json:"content_type"`
+	UploadHeaders map[string]string `json:"upload_headers"`
 }
 
 // --------- app ---------
@@ -120,8 +121,23 @@ func (a *App) handler(ctx context.Context, req events.APIGatewayProxyRequest) (e
 		return jsonError(http.StatusInternalServerError, "presign error")
 	}
 
+	// build the exact headers the client must send on the PUT
+	up := map[string]string{
+		"Content-Type":                 body.ContentType,
+		"x-amz-server-side-encryption": "aws:kms",
+		"x-amz-meta-claim_id":          cid,
+		"x-amz-meta-tags":              strings.Join(body.Tags, ","),
+		"x-amz-meta-client":            body.Client,
+		"x-amz-meta-user_id":           sub,
+	}
+
 	return jsonOK(presignResponse{
-		ClaimID: cid, S3Key: key, PresignedURL: url, ExpiresIn: int(ttl.Seconds()), ContentType: body.ContentType,
+		ClaimID:       cid,
+		S3Key:         key,
+		PresignedURL:  url,
+		ExpiresIn:     int(ttl.Seconds()),
+		ContentType:   body.ContentType,
+		UploadHeaders: up,
 	})
 }
 
