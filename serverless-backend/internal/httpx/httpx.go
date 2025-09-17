@@ -23,6 +23,7 @@ func JSONV1(status int, v any) (events.APIGatewayProxyResponse, error) {
 			"Content-Type":                     "application/json",
 			"Access-Control-Allow-Origin":      allowOriginV1,
 			"Access-Control-Allow-Credentials": "true",
+			"Vary":                             "Origin",
 		},
 		Body: string(b),
 	}, nil
