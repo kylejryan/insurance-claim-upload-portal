@@ -38,6 +38,12 @@ variable "cognito_logout_urls" {
   default = ["http://localhost:5173"]
 }
 
+variable "frontend_origin" {
+  type    = string
+  default = "http://localhost:5173"
+}
+
+
 variable "image_tag_api_presign" {
   type    = string
   default = "dev"
@@ -72,3 +78,4 @@ variable "indexer_image_digest" {
   type    = string
   default = ""  
 }
+

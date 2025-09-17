@@ -24,13 +24,14 @@ resource "aws_s3_bucket_cors_configuration" "claims" {
   bucket = aws_s3_bucket.claims.id
 
   cors_rule {
-    allowed_methods = ["PUT", "HEAD"]
-    allowed_origins = [var.cognito_callback_urls[0]]
+    allowed_methods = ["PUT", "HEAD", "GET"]
+    allowed_origins = [var.frontend_origin]
     allowed_headers = ["*"]
-    expose_headers  = ["ETag", "x-amz-server-side-encryption", "x-amz-version-id"]
-    max_age_seconds = 300
+    expose_headers  = ["ETag", "x-amz-checksum-crc64nvme", "x-amz-server-side-encryption", "x-amz-version-id"]
+    max_age_seconds = 3600
   }
 }
+
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "claims" {
   bucket = aws_s3_bucket.claims.id

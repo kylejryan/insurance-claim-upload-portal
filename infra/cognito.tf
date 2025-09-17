@@ -1,6 +1,13 @@
 resource "aws_cognito_user_pool" "this" {
   name = "${local.name}-users"
 
+  username_attributes      = ["email"]
+  auto_verified_attributes = ["email"]
+
+  email_configuration {
+    email_sending_account = "COGNITO_DEFAULT"
+  }
+
   password_policy {
     minimum_length    = 12
     require_lowercase = true

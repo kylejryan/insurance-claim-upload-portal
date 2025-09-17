@@ -10,6 +10,36 @@ resource "aws_api_gateway_rest_api" "main" {
   tags = local.tags
 }
 
+# Stage with logging and throttling
+resource "aws_api_gateway_stage" "prod" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  deployment_id = aws_api_gateway_deployment.main.id
+  stage_name    = "prod"
+
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.api_access.arn
+    format = jsonencode({
+      requestId      = "$context.requestId"
+      ip             = "$context.identity.sourceIp"
+      caller         = "$context.identity.caller"
+      user           = "$context.identity.user"
+      requestTime    = "$context.requestTime"
+      httpMethod     = "$context.httpMethod"
+      resourcePath   = "$context.resourcePath"
+      status         = "$context.status"
+      protocol       = "$context.protocol"
+      responseLength = "$context.responseLength"
+    })
+  }
+
+  xray_tracing_enabled = var.enable_xray
+  tags                 = local.tags
+
+  # Ensure API Gateway has a CW logs role before stage creation
+  depends_on = [aws_api_gateway_account.main]
+}
+
+
 # Cognito User Pool Authorizer for REST API
 resource "aws_api_gateway_authorizer" "cognito" {
   name            = "${local.name}-cognito-auth"
@@ -99,9 +129,10 @@ resource "aws_api_gateway_method_response" "claims_options" {
   status_code = "200"
 
   response_parameters = {
-    "method.response.header.Access-Control-Allow-Headers" = true
-    "method.response.header.Access-Control-Allow-Methods" = true
-    "method.response.header.Access-Control-Allow-Origin"  = true
+    "method.response.header.Access-Control-Allow-Headers"      = true
+    "method.response.header.Access-Control-Allow-Methods"      = true
+    "method.response.header.Access-Control-Allow-Origin"       = true
+    "method.response.header.Access-Control-Allow-Credentials"  = true
   }
 }
 
@@ -112,9 +143,10 @@ resource "aws_api_gateway_integration_response" "claims_options" {
   status_code = aws_api_gateway_method_response.claims_options.status_code
 
   response_parameters = {
-    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'"
-    "method.response.header.Access-Control-Allow-Origin"  = "'${var.cognito_callback_urls[0]}'"
+    "method.response.header.Access-Control-Allow-Headers"     = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods"     = "'GET,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"      = "'${var.frontend_origin}'"
+    "method.response.header.Access-Control-Allow-Credentials" = "'true'"
   }
 }
 
@@ -144,9 +176,10 @@ resource "aws_api_gateway_method_response" "presign_options" {
   status_code = "200"
 
   response_parameters = {
-    "method.response.header.Access-Control-Allow-Headers" = true
-    "method.response.header.Access-Control-Allow-Methods" = true
-    "method.response.header.Access-Control-Allow-Origin"  = true
+    "method.response.header.Access-Control-Allow-Headers"      = true
+    "method.response.header.Access-Control-Allow-Methods"      = true
+    "method.response.header.Access-Control-Allow-Origin"       = true
+    "method.response.header.Access-Control-Allow-Credentials"  = true
   }
 }
 
@@ -157,25 +190,72 @@ resource "aws_api_gateway_integration_response" "presign_options" {
   status_code = aws_api_gateway_method_response.presign_options.status_code
 
   response_parameters = {
-    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-    "method.response.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
-    "method.response.header.Access-Control-Allow-Origin"  = "'${var.cognito_callback_urls[0]}'"
+    "method.response.header.Access-Control-Allow-Headers"     = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods"     = "'POST,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"      = "'${var.frontend_origin}'"
+    "method.response.header.Access-Control-Allow-Credentials" = "'true'"
   }
 }
+
+resource "aws_api_gateway_gateway_response" "default_4xx" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  response_type = "DEFAULT_4XX"
+  response_parameters = {
+    "gatewayresponse.header.Access-Control-Allow-Origin"      = "'${var.frontend_origin}'"
+    "gatewayresponse.header.Access-Control-Allow-Headers"     = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "gatewayresponse.header.Access-Control-Allow-Methods"     = "'GET,POST,OPTIONS'"
+    "gatewayresponse.header.Access-Control-Allow-Credentials" = "'true'"
+  }
+}
+
+resource "aws_api_gateway_gateway_response" "default_5xx" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  response_type = "DEFAULT_5XX"
+  response_parameters = {
+    "gatewayresponse.header.Access-Control-Allow-Origin"      = "'${var.frontend_origin}'"
+    "gatewayresponse.header.Access-Control-Allow-Headers"     = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "gatewayresponse.header.Access-Control-Allow-Methods"     = "'GET,POST,OPTIONS'"
+    "gatewayresponse.header.Access-Control-Allow-Credentials" = "'true'"
+  }
+}
+
 
 # Deployment
 resource "aws_api_gateway_deployment" "main" {
   rest_api_id = aws_api_gateway_rest_api.main.id
 
   triggers = {
-    redeployment = sha1(jsonencode([
-      aws_api_gateway_resource.claims.id,
-      aws_api_gateway_resource.presign.id,
-      aws_api_gateway_method.get_claims.id,
-      aws_api_gateway_method.post_presign.id,
-      aws_api_gateway_integration.list.id,
-      aws_api_gateway_integration.presign.id,
-    ]))
+    redeployment = sha1(jsonencode({
+      resources = [
+        aws_api_gateway_resource.claims.id,
+        aws_api_gateway_resource.presign.id,
+      ],
+      methods = [
+        aws_api_gateway_method.get_claims.id,
+        aws_api_gateway_method.post_presign.id,
+        aws_api_gateway_method.claims_options.id,
+        aws_api_gateway_method.presign_options.id,
+      ],
+      integrations = [
+        aws_api_gateway_integration.list.id,
+        aws_api_gateway_integration.presign.id,
+        aws_api_gateway_integration.claims_options.id,
+        aws_api_gateway_integration.presign_options.id,
+      ],
+      method_responses = [
+        aws_api_gateway_method_response.claims_options.id,
+        aws_api_gateway_method_response.presign_options.id,
+      ],
+      integration_responses = [
+        aws_api_gateway_integration_response.claims_options.id,
+        aws_api_gateway_integration_response.presign_options.id,
+      ],
+      gateway_responses = [
+        aws_api_gateway_gateway_response.default_4xx.id,
+        aws_api_gateway_gateway_response.default_5xx.id,
+      ],
+      cors_origin = var.frontend_origin,
+    }))
   }
 
   lifecycle {
@@ -187,40 +267,19 @@ resource "aws_api_gateway_deployment" "main" {
     aws_api_gateway_method.post_presign,
     aws_api_gateway_integration.list,
     aws_api_gateway_integration.presign,
+    aws_api_gateway_method.claims_options,
+    aws_api_gateway_integration.claims_options,
+    aws_api_gateway_method_response.claims_options,
+    aws_api_gateway_integration_response.claims_options,
+    aws_api_gateway_method.presign_options,
+    aws_api_gateway_integration.presign_options,
+    aws_api_gateway_method_response.presign_options,
+    aws_api_gateway_integration_response.presign_options,
+    aws_api_gateway_gateway_response.default_4xx,
+    aws_api_gateway_gateway_response.default_5xx,
   ]
 }
 
-# Stage with logging and throttling
-resource "aws_api_gateway_stage" "prod" {
-  deployment_id = aws_api_gateway_deployment.main.id
-  rest_api_id   = aws_api_gateway_rest_api.main.id
-  stage_name    = "prod"
-
-  access_log_settings {
-    destination_arn = aws_cloudwatch_log_group.api_access.arn
-    format = jsonencode({
-      requestId      = "$context.requestId"
-      ip             = "$context.identity.sourceIp"
-      caller         = "$context.identity.caller"
-      user           = "$context.identity.user"
-      requestTime    = "$context.requestTime"
-      httpMethod     = "$context.httpMethod"
-      resourcePath   = "$context.resourcePath"
-      status         = "$context.status"
-      protocol       = "$context.protocol"
-      responseLength = "$context.responseLength"
-    })
-  }
-
-  xray_tracing_enabled = var.enable_xray
-
-  tags = local.tags
-
-  # Make sure the CloudWatch role is configured before creating the stage
-  depends_on = [
-    aws_api_gateway_account.main
-  ]
-}
 
 # Method settings for throttling
 resource "aws_api_gateway_method_settings" "all" {

@@ -11,3 +11,4 @@
 /infra/env
 internal-notes.md
 *.backup
+/frontend/node_modules
