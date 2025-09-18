@@ -194,35 +194,41 @@ FE_ZIP       := /tmp/$(PROJECT_SAN)-$(ENV_SAN)-web.zip
 .PHONY: fe-env-prod
 fe-env-prod:
 	@echo "==> Writing frontend/.env.production from Terraform outputs"
-	@set -euo pipefail; \
-	OUT=$$(terraform -chdir=infra output -json); \
-	API=$$(jq -r '.api_base_url.value // empty' <<<"$$OUT"); \
-	if [ -z "$$API" ]; then \
-	  API=$$(jq -r '.api_endpoints.value.list_claims // empty' <<<"$$OUT"); \
-	  [ -n "$$API" ] && API=$${API%/claims}; \
-	fi; \
-	POOL=$$(jq -r '.cognito_pool_id.value' <<<"$$OUT"); \
-	CLIENT=$$(jq -r '.cognito_client_id.value' <<<"$$OUT"); \
-	DOMAIN=$$(jq -r '.cognito_domain.value // empty' <<<"$$OUT"); \
-	WEB=$$(jq -r '.amplify_branch_url.value // empty' <<<"$$OUT"); \
-	[ -z "$$WEB" -o "$$WEB" = "null" ] && { echo "ERROR: amplify_branch_url output missing."; exit 1; }; \
-	REDIRECT=$${WEB%/}/callback; \
-	REGION="$(REGION_SAN)"; \
-	: "$${API:?API base not found in outputs}"; \
-	echo "VITE_AWS_REGION=$$REGION"            >  "frontend/.env.production"; \
-	echo "VITE_USER_POOL_ID=$$POOL"           >> "frontend/.env.production"; \
-	echo "VITE_USER_POOL_CLIENT_ID=$$CLIENT"  >> "frontend/.env.production"; \
-	[ -n "$$DOMAIN" ] && echo "VITE_COGNITO_DOMAIN=$$DOMAIN" >> "frontend/.env.production"; \
-	echo "VITE_REDIRECT_URI=$$REDIRECT"       >> "frontend/.env.production"; \
-	echo "VITE_API_BASE=$$API"                >> "frontend/.env.production"; \
-	cat "frontend/.env.production"
+	@set -eu; \
+	REGION="$(REGION_SAN)"; [ -n "$$REGION" ] || REGION="us-east-1"; \
+	API="$$(terraform -chdir=infra output -raw api_base_url)"; \
+	POOL="$$(terraform -chdir=infra output -raw cognito_pool_id)"; \
+	CLIENT="$$(terraform -chdir=infra output -raw cognito_client_id)"; \
+	DOM="$$(terraform -chdir=infra output -raw cognito_domain 2>/dev/null || true)"; \
+	WEB="$$(terraform -chdir=infra output -raw amplify_branch_url)"; \
+	[ -n "$$API" ] && [ -n "$$POOL" ] && [ -n "$$CLIENT" ] && [ -n "$$WEB" ] || { echo "ERROR: missing required Terraform outputs"; exit 1; }; \
+	case "$$DOM" in \
+	  http*) COG="$$DOM" ;; \
+	  "")    COG="" ;; \
+	  *)     COG="https://$$DOM.auth.$$REGION.amazoncognito.com" ;; \
+	esac; \
+	WEB="$${WEB%/}"; \
+	mkdir -p frontend; \
+	{ \
+	  echo "VITE_AWS_REGION=$$REGION"; \
+	  echo "VITE_USER_POOL_ID=$$POOL"; \
+	  echo "VITE_USER_POOL_CLIENT_ID=$$CLIENT"; \
+	  [ -n "$$COG" ] && echo "VITE_COGNITO_DOMAIN=$$COG"; \
+	  echo "VITE_REDIRECT_URI=$$WEB/callback"; \
+	  echo "VITE_SIGNOUT_URI=$$WEB/"; \
+	  echo "VITE_API_BASE_URL=$$API"; \
+	  echo "VITE_API_BASE=$$API"; \
+	} > frontend/.env.production; \
+	# Ensure no local overrides shadow production values:
+	rm -f frontend/.env.production.local frontend/.env.local; \
+	# Optionally create a matching .env.production.local to “pin” values at highest precedence:
+	cp frontend/.env.production frontend/.env.production.local; \
+	echo ""; echo "==> Effective env (highest precedence):"; cat frontend/.env.production.local
 
-
-# Build the SPA with Vite
 .PHONY: fe-build
 fe-build: fe-env-prod
 	@echo "==> Building frontend"
-	@cd "$(FRONTEND_DIR)" && npm ci && npm run build
+	@cd "$(FRONTEND_DIR)" && npm ci && npm run build -- --mode production
 
 # Zip the built assets for Amplify file-upload deployment
 .PHONY: fe-zip
