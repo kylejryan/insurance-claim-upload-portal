@@ -75,25 +75,13 @@ func (a *App) processS3Record(ctx context.Context, record events.S3EventRecord) 
 		return fmt.Errorf("head %s: %w", key, err)
 	}
 
-	// Prefer metadata-sourced IDs; fall back to path parsing.
-	userID := strings.TrimSpace(meta.Meta["user_id"])
-	claimID := strings.TrimSpace(meta.Meta["claim_id"])
-	if userID == "" || claimID == "" {
-		if u2, c2, ok := s3io.ParseKey(key); ok { // <- centralized key parser
-			if userID == "" {
-				userID = u2
-			}
-			if claimID == "" {
-				claimID = c2
-			}
-		} else {
-			return fmt.Errorf("bad key %q", key)
-		}
+	userID, claimID, err := a.extractIDs(key, meta)
+	if err != nil {
+		return err
 	}
 
-	// Complete the record (writes size, etag, uploaded_at, s3_key, status)
-	if err := a.ddbRepo.UpsertComplete(ctx, userID, claimID, key, meta.Size, meta.ETag, ddb.NowISO()); err != nil {
-		return fmt.Errorf("finalize %s/%s: %w", userID, claimID, err)
+	if err := a.finalizeRecord(ctx, userID, claimID, key, meta); err != nil {
+		return err
 	}
 
 	log.Printf("finalized %s/%s status=%s size=%d etag=%s",
@@ -121,26 +109,87 @@ func (a *App) getObjectMetadata(ctx context.Context, bucket, key string) (*objec
 		return nil, err
 	}
 
+	return a.buildObjectMetadata(ho, key), nil
+}
+
+// buildObjectMetadata constructs objectMetadata from S3 HeadObjectOutput.
+func (a *App) buildObjectMetadata(ho *s3.HeadObjectOutput, key string) *objectMetadata {
 	m := &objectMetadata{
 		Meta: make(map[string]string, len(ho.Metadata)),
 	}
+
+	a.setBasicFields(m, ho)
+	a.setContentType(m, ho, key)
+	a.setUserMetadata(m, ho)
+
+	return m
+}
+
+// setBasicFields sets size and etag from HeadObjectOutput.
+func (a *App) setBasicFields(m *objectMetadata, ho *s3.HeadObjectOutput) {
 	if ho.ContentLength != nil {
 		m.Size = *ho.ContentLength
 	}
 	if ho.ETag != nil {
 		m.ETag = strings.Trim(*ho.ETag, "\"")
 	}
-	if ho.ContentType != nil {
-		m.ContentType = strings.ToLower(*ho.ContentType)
-		// Be tolerant: log if unexpected but don't fail the pipeline
-		if m.ContentType != "" && m.ContentType != s3io.ContentTypeText { // <- constant
-			log.Printf("indexer: warning content-type=%s for %s", m.ContentType, key)
-		}
+}
+
+// setContentType sets and validates content type.
+func (a *App) setContentType(m *objectMetadata, ho *s3.HeadObjectOutput, key string) {
+	if ho.ContentType == nil {
+		return
 	}
-	// Normalize user metadata keys to lowercase
+
+	m.ContentType = strings.ToLower(*ho.ContentType)
+
+	// Be tolerant: log if unexpected but don't fail the pipeline
+	if m.ContentType != "" && m.ContentType != s3io.ContentTypeText {
+		log.Printf("indexer: warning content-type=%s for %s", m.ContentType, key)
+	}
+}
+
+// setUserMetadata normalizes and copies user metadata keys to lowercase.
+func (a *App) setUserMetadata(m *objectMetadata, ho *s3.HeadObjectOutput) {
 	for k, v := range ho.Metadata {
 		m.Meta[strings.ToLower(k)] = v
 	}
+}
 
-	return m, nil
+// extractIDs gets user and claim IDs from metadata or S3 key path.
+func (a *App) extractIDs(key string, meta *objectMetadata) (userID, claimID string, err error) {
+	userID = strings.TrimSpace(meta.Meta["user_id"])
+	claimID = strings.TrimSpace(meta.Meta["claim_id"])
+
+	if userID != "" && claimID != "" {
+		return userID, claimID, nil
+	}
+
+	return a.extractIDsFromPath(key, userID, claimID)
+}
+
+// extractIDsFromPath parses IDs from S3 key path as fallback.
+func (a *App) extractIDsFromPath(key, userID, claimID string) (string, string, error) {
+	u2, c2, ok := s3io.ParseKey(key)
+	if !ok {
+		return "", "", fmt.Errorf("bad key %q", key)
+	}
+
+	if userID == "" {
+		userID = u2
+	}
+	if claimID == "" {
+		claimID = c2
+	}
+
+	return userID, claimID, nil
+}
+
+// finalizeRecord completes the record in DynamoDB.
+func (a *App) finalizeRecord(ctx context.Context, userID, claimID, key string, meta *objectMetadata) error {
+	err := a.ddbRepo.UpsertComplete(ctx, userID, claimID, key, meta.Size, meta.ETag, ddb.NowISO())
+	if err != nil {
+		return fmt.Errorf("finalize %s/%s: %w", userID, claimID, err)
+	}
+	return nil
 }

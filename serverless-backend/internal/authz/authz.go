@@ -81,30 +81,48 @@ func subFromAuthHeader(headers map[string]string) string {
 
 // FromAPIGWv1 extracts the Cognito user sub from a REST (v1) request.
 func FromAPIGWv1(req events.APIGatewayProxyRequest, devBypass bool) (string, error) {
-	// 0) Dev bypass header
-	if devBypass {
-		if sub := strings.TrimSpace(headerLookup(req.Headers, devBypassHeader)); sub != "" {
-			return sub, nil
-		}
+	// Try each extraction method in order of preference
+	extractors := []func() string{
+		func() string { return tryDevBypass(req.Headers, devBypass) },
+		func() string { return tryAuthorizerContext(req.RequestContext.Authorizer) },
+		func() string { return subFromAuthHeader(req.Headers) },
 	}
 
-	// 1) Cognito authorizer map (can contain "claims" or top-level fields)
-	if m := req.RequestContext.Authorizer; m != nil {
-		if sub := subFromClaims(m["claims"]); sub != "" {
+	for _, extract := range extractors {
+		if sub := extract(); sub != "" {
 			return sub, nil
 		}
-		if sub := stringIf(m["sub"]); sub != "" {
-			return sub, nil
-		}
-		if sub := stringIf(m["principalId"]); sub != "" {
-			return sub, nil
-		}
-	}
-
-	// 2) Fallback: parse JWT from Authorization header (unverified)
-	if sub := subFromAuthHeader(req.Headers); sub != "" {
-		return sub, nil
 	}
 
 	return "", ErrUnauthorized
+}
+
+// tryDevBypass checks for dev bypass header if enabled.
+func tryDevBypass(headers map[string]string, devBypass bool) string {
+	if !devBypass {
+		return ""
+	}
+	return strings.TrimSpace(headerLookup(headers, devBypassHeader))
+}
+
+// tryAuthorizerContext extracts sub from Cognito authorizer context.
+func tryAuthorizerContext(authorizer map[string]interface{}) string {
+	if authorizer == nil {
+		return ""
+	}
+
+	// Try each potential source in the authorizer context
+	sources := []func() string{
+		func() string { return subFromClaims(authorizer["claims"]) },
+		func() string { return stringIf(authorizer["sub"]) },
+		func() string { return stringIf(authorizer["principalId"]) },
+	}
+
+	for _, source := range sources {
+		if sub := source(); sub != "" {
+			return sub
+		}
+	}
+
+	return ""
 }
