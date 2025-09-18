@@ -29,7 +29,7 @@ resource "aws_lambda_function" "api_presign" {
       DDB_TABLE = aws_dynamodb_table.claims.name
       S3_BUCKET = aws_s3_bucket.claims.bucket
       KMS_KEY   = aws_kms_key.s3.arn
-      FRONTEND_ORIGIN = var.frontend_origin
+      FRONTEND_ORIGIN = local.amplify_origin
     }
   }
 
@@ -59,7 +59,7 @@ resource "aws_lambda_function" "api_list" {
       DDB_TABLE = aws_dynamodb_table.claims.name
       S3_BUCKET = aws_s3_bucket.claims.bucket
       KMS_KEY   = aws_kms_key.ddb.arn
-      FRONTEND_ORIGIN = var.frontend_origin
+      FRONTEND_ORIGIN = local.amplify_origin
     }
   }
 

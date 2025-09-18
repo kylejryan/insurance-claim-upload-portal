@@ -145,7 +145,7 @@ resource "aws_api_gateway_integration_response" "claims_options" {
   response_parameters = {
     "method.response.header.Access-Control-Allow-Headers"     = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
     "method.response.header.Access-Control-Allow-Methods"     = "'GET,OPTIONS'"
-    "method.response.header.Access-Control-Allow-Origin"      = "'${local.frontend_origin}'"
+    "method.response.header.Access-Control-Allow-Origin"      = "'${local.amplify_origin}'"
     "method.response.header.Access-Control-Allow-Credentials" = "'true'"
   }
 }
@@ -192,7 +192,7 @@ resource "aws_api_gateway_integration_response" "presign_options" {
   response_parameters = {
     "method.response.header.Access-Control-Allow-Headers"     = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
     "method.response.header.Access-Control-Allow-Methods"     = "'POST,OPTIONS'"
-    "method.response.header.Access-Control-Allow-Origin"      = "'${local.frontend_origin}'"
+    "method.response.header.Access-Control-Allow-Origin"      = "'${local.amplify_origin}'"
     "method.response.header.Access-Control-Allow-Credentials" = "'true'"
   }
 }
@@ -201,7 +201,7 @@ resource "aws_api_gateway_gateway_response" "default_4xx" {
   rest_api_id   = aws_api_gateway_rest_api.main.id
   response_type = "DEFAULT_4XX"
   response_parameters = {
-    "gatewayresponse.header.Access-Control-Allow-Origin"      = "'${local.frontend_origin}'"
+    "gatewayresponse.header.Access-Control-Allow-Origin"      = "'${local.amplify_origin}'"
     "gatewayresponse.header.Access-Control-Allow-Headers"     = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
     "gatewayresponse.header.Access-Control-Allow-Methods"     = "'GET,POST,OPTIONS'"
     "gatewayresponse.header.Access-Control-Allow-Credentials" = "'true'"
@@ -212,7 +212,7 @@ resource "aws_api_gateway_gateway_response" "default_5xx" {
   rest_api_id   = aws_api_gateway_rest_api.main.id
   response_type = "DEFAULT_5XX"
   response_parameters = {
-    "gatewayresponse.header.Access-Control-Allow-Origin"      = "'${local.frontend_origin}'"
+    "gatewayresponse.header.Access-Control-Allow-Origin"      = "'${local.amplify_origin}'"
     "gatewayresponse.header.Access-Control-Allow-Headers"     = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
     "gatewayresponse.header.Access-Control-Allow-Methods"     = "'GET,POST,OPTIONS'"
     "gatewayresponse.header.Access-Control-Allow-Credentials" = "'true'"
@@ -254,7 +254,7 @@ resource "aws_api_gateway_deployment" "main" {
         aws_api_gateway_gateway_response.default_4xx.id,
         aws_api_gateway_gateway_response.default_5xx.id,
       ],
-      cors_origin = local.frontend_origin,
+      cors_origin = local.amplify_origin
     }))
   }
 
