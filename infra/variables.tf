@@ -28,19 +28,22 @@ variable "cidr_private_b" {
   default = "10.42.2.0/24"
 }
 
+variable "frontend_origin" {
+  description = "Optional override for the frontend origin. Leave empty to auto-compute from Amplify."
+  type        = string
+  default     = ""   
+}
+
 variable "cognito_callback_urls" {
-  type    = list(string)
-  default = ["http://localhost:5173/callback"]
+  description = "Optional override. Leave empty to auto-compute from frontend_origin."
+  type        = list(string)
+  default     = []
 }
 
 variable "cognito_logout_urls" {
-  type    = list(string)
-  default = ["http://localhost:5173"]
-}
-
-variable "frontend_origin" {
-  type    = string
-  default = "http://localhost:5173"
+  description = "Optional override. Leave empty to auto-compute from frontend_origin."
+  type        = list(string)
+  default     = []
 }
 
 
