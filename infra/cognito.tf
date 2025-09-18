@@ -36,8 +36,8 @@ resource "aws_cognito_user_pool_client" "this" {
   allowed_oauth_flows_user_pool_client = true
   allowed_oauth_flows                  = ["code"]
   allowed_oauth_scopes                 = ["email", "openid", "profile"]
-  callback_urls                        = var.cognito_callback_urls
-  logout_urls                          = var.cognito_logout_urls
+  callback_urls                        = local.cognito_callback_urls
+  logout_urls                          = local.cognito_logout_urls
 }
 
 resource "aws_cognito_user_pool_domain" "this" {
@@ -49,4 +49,20 @@ resource "random_string" "cog" {
   length  = 6
   special = false
   upper   = false
+}
+
+locals {
+  cognito_callback_urls = var.allow_localhost_in_cors ? [
+    "http://localhost:5173/callback",
+    "${local.frontend_origin}/callback"
+    ] : [
+    "${local.frontend_origin}/callback"
+  ]
+
+  cognito_logout_urls = var.allow_localhost_in_cors ? [
+    "http://localhost:5173",
+    local.frontend_origin
+    ] : [
+    local.frontend_origin
+  ]
 }

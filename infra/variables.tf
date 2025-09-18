@@ -66,16 +66,25 @@ variable "enable_xray" {
 
 variable "presign_image_digest" {
   type    = string
-  default = ""  
+  default = ""
 }
 
 variable "list_image_digest" {
   type    = string
-  default = ""  
+  default = ""
 }
 
 variable "indexer_image_digest" {
   type    = string
-  default = ""  
+  default = ""
 }
 
+variable "allow_localhost_in_cors" {
+  type    = bool
+  default = false # prod-safe default
+}
+
+variable "amplify_branch_name" {
+  type    = string
+  default = "prod"
+}

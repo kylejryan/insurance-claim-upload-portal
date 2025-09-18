@@ -3,6 +3,8 @@ package httpx
 
 import (
 	"encoding/json"
+	"os"
+	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
 )
@@ -11,8 +13,8 @@ import (
 // -------- REST API Gateway v1 (APIGatewayProxyResponse) --------
 //
 
-// For dev pin to localhost origin. You can later read this from env/config.
-const allowOriginV1 = "http://localhost:5173"
+// Read allowed origin strictly from env var FRONTEND_ORIGIN.
+var allowOriginV1 = strings.TrimSpace(os.Getenv("FRONTEND_ORIGIN"))
 
 // JSONV1 creates an API Gateway v1 (REST) JSON response with CORS headers.
 func JSONV1(status int, v any) (events.APIGatewayProxyResponse, error) {

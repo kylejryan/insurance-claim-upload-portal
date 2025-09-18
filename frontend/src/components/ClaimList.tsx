@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import type { Claim } from '../api';
-import { RefreshCw, FileText, Building2, Clock, CheckCircle2, Tag, Search, Filter, Activity } from 'lucide-react';
+import { RefreshCw, FileText, Building2, Clock, CheckCircle2, Tag, Search, Activity } from 'lucide-react';
 
 export default function ClaimList({ claims, refresh, loading }: {
   claims: Claim[]; 

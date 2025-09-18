@@ -25,7 +25,7 @@ resource "aws_s3_bucket_cors_configuration" "claims" {
 
   cors_rule {
     allowed_methods = ["PUT", "HEAD", "GET"]
-    allowed_origins = [var.frontend_origin]
+    allowed_origins = [local.frontend_origin]
     allowed_headers = ["*"]
     expose_headers  = ["ETag", "x-amz-checksum-crc64nvme", "x-amz-server-side-encryption", "x-amz-version-id"]
     max_age_seconds = 3600

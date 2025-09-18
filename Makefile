@@ -164,8 +164,9 @@ clean:
 
 # -------- One-shot deploy wrapper -------
 .PHONY: deploy
-deploy: tf-ecr build push digests tf-plan tf-apply
-	@echo "✅ Deploy complete for ENV=$(ENV_SAN), TAG=$(TAG_SAN)"
+deploy: tf-ecr build push digests tf-plan tf-apply fe-deploy
+	@echo "✅ Backend + Frontend deployed for ENV=$(ENV_SAN), TAG=$(TAG_SAN)"
+
 
 # -------- Debug helpers ----------------
 .PHONY: print-vars
@@ -181,3 +182,76 @@ print-vars:
 	@echo "REPO_INDEXER       = $(REPO_INDEXER)"
 	@echo "TAG_SAN            = $(TAG_SAN)"
 	@echo "TFVARS_PATH        = $(TFVARS_PATH)"
+
+# ===========================
+# Frontend (Amplify Hosting)
+# ===========================
+FRONTEND_DIR ?= frontend
+FE_DIST      := $(FRONTEND_DIR)/dist
+FE_ZIP       := /tmp/$(PROJECT_SAN)-$(ENV_SAN)-web.zip
+
+# Generate a production env file for Vite builds from Terraform outputs
+.PHONY: fe-env-prod
+fe-env-prod:
+	@echo "==> Writing frontend/.env.production from Terraform outputs"
+	@set -euo pipefail; \
+	OUT=$$(terraform -chdir=infra output -json); \
+	API=$$(jq -r '.api_base_url.value // empty' <<<"$$OUT"); \
+	if [ -z "$$API" ]; then \
+	  API=$$(jq -r '.api_endpoints.value.list_claims // empty' <<<"$$OUT"); \
+	  [ -n "$$API" ] && API=$${API%/claims}; \
+	fi; \
+	POOL=$$(jq -r '.cognito_pool_id.value' <<<"$$OUT"); \
+	CLIENT=$$(jq -r '.cognito_client_id.value' <<<"$$OUT"); \
+	DOMAIN=$$(jq -r '.cognito_domain.value // empty' <<<"$$OUT"); \
+	WEB=$$(jq -r '.amplify_branch_url.value // empty' <<<"$$OUT"); \
+	[ -z "$$WEB" -o "$$WEB" = "null" ] && { echo "ERROR: amplify_branch_url output missing."; exit 1; }; \
+	REDIRECT=$${WEB%/}/callback; \
+	REGION="$(REGION_SAN)"; \
+	: "$${API:?API base not found in outputs}"; \
+	echo "VITE_AWS_REGION=$$REGION"            >  "frontend/.env.production"; \
+	echo "VITE_USER_POOL_ID=$$POOL"           >> "frontend/.env.production"; \
+	echo "VITE_USER_POOL_CLIENT_ID=$$CLIENT"  >> "frontend/.env.production"; \
+	[ -n "$$DOMAIN" ] && echo "VITE_COGNITO_DOMAIN=$$DOMAIN" >> "frontend/.env.production"; \
+	echo "VITE_REDIRECT_URI=$$REDIRECT"       >> "frontend/.env.production"; \
+	echo "VITE_API_BASE=$$API"                >> "frontend/.env.production"; \
+	cat "frontend/.env.production"
+
+
+# Build the SPA with Vite
+.PHONY: fe-build
+fe-build: fe-env-prod
+	@echo "==> Building frontend"
+	@cd "$(FRONTEND_DIR)" && npm ci && npm run build
+
+# Zip the built assets for Amplify file-upload deployment
+.PHONY: fe-zip
+fe-zip: fe-build
+	@echo "==> Zipping $(FE_DIST) -> $(FE_ZIP)"
+	@rm -f "$(FE_ZIP)"; \
+	cd "$(FE_DIST)" && zip -qr "$(FE_ZIP)" .
+
+# Upload the ZIP via create-deployment → PUT presigned URL → start-deployment
+.PHONY: fe-deploy
+fe-deploy: fe-zip
+	@set -euo pipefail; \
+	OUT=$$(terraform -chdir=infra output -json); \
+	APPID=$$(jq -r '.amplify_app_id.value' <<<"$$OUT"); \
+	BRANCH=$$(jq -r '.amplify_branch_name.value // "prod"' <<<"$$OUT"); \
+	WEB=$$(jq -r '.amplify_branch_url.value // empty' <<<"$$OUT"); \
+	echo "==> Creating deployment (app=$$APPID branch=$$BRANCH)"; \
+	DEP=$$(aws amplify create-deployment --app-id "$$APPID" --branch-name "$$BRANCH" --query '{jobId:jobId, url:zipUploadUrl}' --output json --region "$(REGION_SAN)"); \
+	JOB=$$(jq -r .jobId <<<"$$DEP"); \
+	URL=$$(jq -r .url   <<<"$$DEP"); \
+	echo "==> Uploading ZIP to pre-signed URL"; \
+	curl -sS -X PUT -T "/tmp/$(PROJECT_SAN)-$(ENV_SAN)-web.zip" "$$URL" > /dev/null; \
+	echo "==> Starting deployment (jobId=$$JOB)"; \
+	aws amplify start-deployment --app-id "$$APPID" --branch-name "$$BRANCH" --job-id "$$JOB" --region "$(REGION_SAN)" > /dev/null; \
+	echo ""; echo "🌐  Amplify URL: $$WEB"; echo ""
+
+.PHONY: fe-open
+fe-open:
+	@URL=$$(terraform -chdir=infra output -raw amplify_branch_url); \
+	if command -v open >/dev/null 2>&1; then open "$$URL"; \
+	elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$$URL"; \
+	else echo "$$URL"; fi
