@@ -52,6 +52,7 @@ type App struct {
 	ddbRepo *ddb.Repo
 }
 
+// main initializes the app and starts the Lambda handler.
 func main() {
 	env := config.MustLoad()
 	if err := env.Validate(); err != nil { //
@@ -79,6 +80,7 @@ func main() {
 
 // --------- handler ---------
 
+// handler processes the POST /claims/presign request to generate a presigned S3 upload URL.
 func (a *App) handler(ctx context.Context, req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	sub, err := authz.FromAPIGWv1(req, a.env.DevBypassAuth)
 	if err != nil {
@@ -125,6 +127,7 @@ func (a *App) handler(ctx context.Context, req events.APIGatewayProxyRequest) (e
 
 // --------- validation / business logic ---------
 
+// parseAndValidateRequest unmarshals and validates the incoming JSON request body.
 func (a *App) parseAndValidateRequest(body string) (presignRequest, error) {
 	var req presignRequest
 	if err := json.Unmarshal([]byte(body), &req); err != nil {
@@ -149,6 +152,7 @@ func (a *App) parseAndValidateRequest(body string) (presignRequest, error) {
 	return req, nil
 }
 
+// headerLookup performs a case-insensitive lookup of an HTTP header key.
 func (a *App) createPendingRecord(ctx context.Context, userID, claimID, s3Key string, req presignRequest) error {
 	pk, sk := ddb.MakeKeys(userID, claimID)
 	claim := models.Claim{
@@ -164,6 +168,7 @@ func (a *App) createPendingRecord(ctx context.Context, userID, claimID, s3Key st
 	return a.ddbRepo.PutPending(ctx, claim)
 }
 
+// generatePresignedURL creates a presigned PUT URL with metadata.
 func (a *App) generatePresignedURL(ctx context.Context, userID, claimID, s3Key string, req presignRequest) (string, time.Duration, error) {
 	meta := map[string]string{
 		"claim_id": claimID,
@@ -174,6 +179,7 @@ func (a *App) generatePresignedURL(ctx context.Context, userID, claimID, s3Key s
 	return s3io.PresignPut(ctx, a.s3p, a.env.Bucket, s3Key, req.ContentType, meta, a.env.PresignTTL)
 }
 
+// sanitizeName ensures the filename is non-empty and trimmed; else generates a random name.
 func sanitizeName(s string) string {
 	s = strings.TrimSpace(s)
 	if s == "" {
