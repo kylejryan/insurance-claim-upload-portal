@@ -1,5 +1,23 @@
-General repo structure to build
+# Insurance Claim Upload Portal — Go Backend
 
+Serverless Go services that power presigned uploads and user‑scoped listing. This README focuses on the **Go code layout**, **revive linting**, **Dockerfile modularity**, **VPC endpoints/security posture**, and **local testing**.
+
+---
+
+## Overview
+
+* **Handlers (Go):**
+
+  * `presign` — issues S3 **PUT** presigned URL and writes a *pending* record
+  * `list` — lists caller’s uploaded claims from DynamoDB
+  * `indexer` — finalizes records on **S3\:ObjectCreated**
+* **Shared library (`internal/`)** centralizes auth, config, AWS SDK, DDB repo, S3 helpers, validation, HTTP helpers, and types so handlers stay tiny and testable.
+
+---
+
+## Repository Structure (Go‑only)
+
+```
 my-serverless-backend/
 ├─ cmd/
 │  ├─ presign/      # Lambda 1: POST /claims/presign
@@ -26,9 +44,90 @@ my-serverless-backend/
 │  └─ models/       # Claim, UserClaims, error types
 │     └─ types.go
 ├─ Dockerfile       # Multi-stage; build all 3 handlers (separate images via args)
+├─ docker-compose.yaml
+├─ events/
+│  └─ s3_put.json
 ├─ go.mod / go.sum
+├─ samconfig.toml
+├─ template.yaml
 └─ README.md
+```
 
+---
+
+## Build, Test, Lint
+
+```bash
+# deps & tests
+go mod download
+go test ./...
+
+# build linux binaries for Lambda
+GOOS=linux GOARCH=amd64 go build -o bin/presign  ./cmd/presign
+GOOS=linux GOARCH=amd64 go build -o bin/list     ./cmd/list
+GOOS=linux GOARCH=amd64 go build -o bin/indexer  ./cmd/indexer
+```
+
+### Linting with `revive`
+
+Add `revive.toml` at repo root (key rules shown; tune as needed):
+
+```toml
+ignoreGeneratedHeader = false
+severity = "warning"
+confidence = 0.8
+errorCode = 0
+warningCode = 0
+
+# Enable common rules
+[rule.blank-imports]
+[rule.error-return]
+[rule.error-strings]
+[rule.exported]
+[rule.var-naming]
+[rule.package-comments]
+[rule.unexported-return]
+
+# Tuning complexity
+[rule.cyclomatic]
+arguments = [10]
+
+[rule.cognitive-complexity]
+arguments = [7]
+```
+
+Run:
+
+```bash
+revive -config revive.toml ./...
+```
+
+---
+
+## Dockerfile (Modular, Shared `internal/`)
+
+A single **multi‑stage** Dockerfile builds any handler; pass the target via build arg. Benefits: shared dependency cache, consistent toolchain, small images.
+
+Each image contains just one tiny binary built against the shared `internal/` packages.
+
+---
+
+## VPC Endpoints & Security Posture
+
+* **Private subnets** for all Lambdas; **no public egress** path required.
+* **VPC endpoints** to S3, DynamoDB, KMS, CloudWatch Logs keep traffic on the AWS backbone and simplify egress control.
+* **AuthN/Z**: API Gateway + Cognito authorizer; handlers extract `sub` and **scope S3 keys & DDB access** to the caller.
+* **Least‑privilege IAM** per handler: `presign` (S3 put + DDB put), `list` (DDB query), `indexer` (S3 get + DDB write).
+* **Storage hardening**: S3 KMS, block public access, deny non‑TLS; DDB on‑demand, encrypted.
+* **Validation & logging**: `internal/validate` enforces file type/size/tags; `observability` adds structured logs and request IDs.
+
+---
+
+## Local Testing / Examples (LocalStack + SAM)
+
+> Uses LocalStack via `docker compose`, AWS CLI targeting `localhost:4566`, and SAM local to run the API.
+
+```bash
 # 1) bring up LocalStack
 docker compose up -d
 
@@ -82,4 +181,18 @@ sam local invoke IndexerFunction --docker-network sam-local -e events/s3_put.jso
 
 curl -s http://127.0.0.1:3000/claims \
   -H 'x-user-sub: 11111111-1111-1111-1111-111111111111' | jq
+```
 
+---
+
+## Minimal API Surface
+
+* `POST /claims/presign` → `{ claim_id, presigned_url, headers }`
+* `GET /claims` → `[{ id, filename, tags, client, uploaded_at }]`
+* `S3:ObjectCreated` → `indexer` consumes event, finalizes the DynamoDB record
+
+---
+
+## Cleanup
+
+Tear down cloud resources with your IaC (e.g., `terraform destroy`) and stop local containers with `docker compose down`.
