@@ -55,20 +55,7 @@ my-serverless-backend/
 
 ---
 
-## Build, Test, Lint
-
-```bash
-# deps & tests
-go mod download
-go test ./...
-
-# build linux binaries for Lambda
-GOOS=linux GOARCH=amd64 go build -o bin/presign  ./cmd/presign
-GOOS=linux GOARCH=amd64 go build -o bin/list     ./cmd/list
-GOOS=linux GOARCH=amd64 go build -o bin/indexer  ./cmd/indexer
-```
-
-### Linting with `revive`
+## Lint
 
 Add `revive.toml` at repo root (key rules shown; tune as needed):
 
